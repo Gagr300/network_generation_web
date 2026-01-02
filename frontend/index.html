@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Network Graph Generator</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1><i class="fas fa-project-diagram"></i> Network Graph Generator</h1>
+            <p>Upload, analyze, and generate directed graphs based on triplet motifs</p>
+        </header>
+
+        <div class="main-content">
+            <div class="left-panel">
+                <div class="card">
+                    <h2><i class="fas fa-upload"></i> Upload Graph</h2>
+                    <div class="upload-area" id="uploadArea">
+                        <i class="fas fa-cloud-upload-alt fa-3x"></i>
+                        <p>Drag & drop your graph file here</p>
+                        <p class="small">Supported formats: TXT (edgelist), GML, GEXF</p>
+                        <input type="file" id="fileInput" accept=".txt,.gml,.gexf">
+                        <button onclick="document.getElementById('fileInput').click()">Browse Files</button>
+                    </div>
+
+                    <div class="sample-data">
+                        <h3>Sample Data</h3>
+                        <button onclick="loadSampleData()">Load World Trade 1994 Dataset</button>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h2><i class="fas fa-cogs"></i> Controls</h2>
+                    <div class="controls">
+                        <button id="analyzeBtn" onclick="analyzeGraph()" disabled>
+                            <i class="fas fa-chart-bar"></i> Analyze Motifs
+                        </button>
+                        <button id="generateBtn" onclick="generateGraph()" disabled>
+                            <i class="fas fa-magic"></i> Generate New Graph
+                        </button>
+                        <div class="download-options">
+                            <h4>Download Options:</h4>
+                            <select id="downloadFormat">
+                                <option value="txt">Text (Edgelist)</option>
+                                <option value="gml">GML</option>
+                                <option value="gexf">GEXF</option>
+                                <option value="graphml">GraphML</option>
+                            </select>
+                            <button onclick="downloadGraph()" disabled id="downloadBtn">
+                                <i class="fas fa-download"></i> Download
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h2><i class="fas fa-info-circle"></i> Graph Metrics</h2>
+                    <div id="metrics" class="metrics">
+                        <p>Upload a graph to see metrics</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="right-panel">
+                <div class="card graph-container">
+                    <h2><i class="fas fa-network-wired"></i> Graph Visualization</h2>
+                    <div id="graph" class="graph-view">
+                        <p class="placeholder">Graph will appear here after upload or generation</p>
+                    </div>
+                    <div class="graph-controls">
+                        <button onclick="resetView()"><i class="fas fa-sync-alt"></i> Reset View</button>
+                        <button onclick="toggleLabels()"><i class="fas fa-tag"></i> Toggle Labels</button>
+                        <div class="slider-container">
+                            <label>Force Strength:</label>
+                            <input type="range" id="forceSlider" min="1" max="100" value="50">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h2><i class="fas fa-shapes"></i> Motif Analysis</h2>
+                    <div id="motifAnalysis" class="motif-analysis">
+                        <p>Click "Analyze Motifs" to see triplet distribution</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <footer>
+            <p>Network Graph Generator v1.0 | Based on Wegner Multiplet Model</p>
+        </footer>
+    </div>
+
+    <!-- Loading Modal -->
+    <div id="loadingModal" class="modal">
+        <div class="modal-content">
+            <div class="loader"></div>
+            <p id="loadingMessage">Processing...</p>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
