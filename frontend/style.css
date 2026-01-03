@@ -222,151 +222,171 @@ header p {
     background: #805ad5;
 }
 
-.metrics {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 15px;
+/* Combined Metrics Styles */
+.combined-metrics {
+    min-height: 400px;
+    max-height: 600px;
+    overflow-y: auto;
 }
 
-.metric-item {
-    background: #f7fafc;
-    padding: 15px;
-    border-radius: 8px;
+.metrics-placeholder {
+    text-align: center;
+    padding: 40px 20px;
+    color: #a0aec0;
+}
+
+.metrics-placeholder i {
+    margin-bottom: 20px;
+}
+
+.combined-metrics-container {
+    display: flex;
+    flex-direction: column;
+    gap: 25px;
+}
+
+.metrics-section {
+    background: #f8fafc;
+    padding: 20px;
+    border-radius: 10px;
     border-left: 4px solid #667eea;
 }
 
-.metric-item h4 {
+.metrics-section h3 {
     color: #4a5568;
-    margin-bottom: 5px;
-    font-size: 0.9em;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
+    margin-bottom: 15px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 1.1em;
+}
+
+.metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 15px;
+}
+
+.metric-card {
+    background: white;
+    padding: 15px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+    border: 1px solid #e2e8f0;
+}
+
+.metric-icon {
+    width: 40px;
+    height: 40px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+}
+
+.metric-content {
+    flex: 1;
 }
 
 .metric-value {
     font-size: 1.5em;
     font-weight: bold;
     color: #2d3748;
+    line-height: 1.2;
 }
 
-.graph-container {
-    height: 500px;
-    display: flex;
-    flex-direction: column;
+.metric-label {
+    font-size: 0.85em;
+    color: #718096;
+    margin-top: 3px;
 }
 
-.graph-view {
-    flex: 1;
-    border: 2px solid #e2e8f0;
-    border-radius: 10px;
-    margin-bottom: 15px;
-    overflow: hidden;
-    position: relative;
-    background: #f8fafc;
-}
-
-.graph-view .placeholder {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    color: #a0aec0;
-    font-style: italic;
-    text-align: center;
-}
-
-.graph-controls {
-    display: flex;
-    gap: 10px;
-    align-items: center;
-}
-
-.graph-controls button {
-    padding: 10px 20px;
-    background: #4fd1c7;
-    color: white;
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-weight: 600;
-}
-
-.graph-controls button:hover {
-    background: #38b2ac;
-}
-
-.slider-container {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-left: auto;
-}
-
-.slider-container label {
-    color: #4a5568;
-    font-weight: 500;
-}
-
-.slider-container input {
-    flex: 1;
-}
-
+/* Motif Analysis Styles */
 .motif-analysis {
-    max-height: 400px;
+    min-height: 300px;
+    max-height: 500px;
     overflow-y: auto;
 }
 
-.motif-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-    gap: 15px;
-    margin-top: 20px;
+.analysis-placeholder {
+    text-align: center;
+    padding: 40px 20px;
+    color: #a0aec0;
 }
 
-.motif-item {
-    background: #f7fafc;
-    padding: 15px;
+.analysis-placeholder i {
+    margin-bottom: 20px;
+}
+
+.motif-summary {
+    margin-bottom: 20px;
+}
+
+.summary-card {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 20px;
     border-radius: 10px;
     text-align: center;
-    border: 2px solid transparent;
-    transition: all 0.3s ease;
 }
 
-.motif-item:hover {
-    border-color: #667eea;
-    transform: translateY(-2px);
-}
-
-.motif-item h4 {
-    color: #4a5568;
-    margin-bottom: 10px;
-    font-size: 0.9em;
-}
-
-.motif-count {
-    font-size: 1.8em;
-    font-weight: bold;
-    color: #2d3748;
+.summary-card h3 {
+    font-size: 2.5em;
     margin-bottom: 5px;
 }
 
-.motif-probability {
-    color: #718096;
-    font-size: 0.9em;
+.motif-table-container {
+    margin: 20px 0;
 }
 
-footer {
-    text-align: center;
-    color: white;
-    padding: 20px;
-    margin-top: 30px;
-    background: rgba(255, 255, 255, 0.1);
-    border-radius: 15px;
-    backdrop-filter: blur(10px);
+.motif-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.motif-table th,
+.motif-table td {
+    padding: 10px;
+    text-align: left;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.motif-table th {
+    background: #f7fafc;
+    color: #4a5568;
+    font-weight: 600;
+}
+
+.motif-table tr:hover {
+    background: #f7fafc;
+}
+
+.motif-insights {
+    background: #fef3c7;
+    padding: 15px;
+    border-radius: 8px;
+    margin-top: 20px;
+    border-left: 4px solid #d69e2e;
+}
+
+.motif-insights h4 {
+    color: #744210;
+    margin-bottom: 10px;
+}
+
+.motif-insights ul {
+    list-style: none;
+    padding: 0;
+}
+
+.motif-insights li {
+    padding: 5px 0;
+    color: #5f370e;
 }
 
 /* Modal Styles */
@@ -411,6 +431,16 @@ footer {
     100% { transform: rotate(360deg); }
 }
 
+footer {
+    text-align: center;
+    color: white;
+    padding: 20px;
+    margin-top: 30px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 15px;
+    backdrop-filter: blur(10px);
+}
+
 /* Scrollbar Styling */
 ::-webkit-scrollbar {
     width: 8px;
@@ -435,10 +465,6 @@ footer {
     .main-content {
         grid-template-columns: 1fr;
     }
-
-    .metrics {
-        grid-template-columns: repeat(3, 1fr);
-    }
 }
 
 @media (max-width: 768px) {
@@ -456,26 +482,29 @@ footer {
         padding: 20px;
     }
 
-    .metrics {
-        grid-template-columns: repeat(2, 1fr);
+    .metrics-grid {
+        grid-template-columns: 1fr;
     }
 
-    .graph-controls {
-        flex-wrap: wrap;
-    }
-
-    .slider-container {
-        width: 100%;
-        margin-top: 10px;
+    .info-grid {
+        grid-template-columns: 1fr;
     }
 }
 
 @media (max-width: 480px) {
-    .metrics {
-        grid-template-columns: 1fr;
+    .metric-card {
+        flex-direction: column;
+        text-align: center;
+        gap: 10px;
     }
 
-    .motif-grid {
-        grid-template-columns: repeat(2, 1fr);
+    .metric-icon {
+        width: 35px;
+        height: 35px;
+        font-size: 0.9em;
+    }
+
+    .metric-value {
+        font-size: 1.3em;
     }
 }

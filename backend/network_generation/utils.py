@@ -37,6 +37,8 @@ def calculate_graph_metrics(G):
     if strong_components:
         largest_strong = max(strong_components, key=len)
         metrics['strongly_connected_nodes'] = len(largest_strong)
+        metrics['strongly_connected'] = len(strong_components) == 1
+
         G_strong = G.subgraph(largest_strong)
         if len(largest_strong) > 1:
             metrics['transitivity'] = nx.transitivity(G_strong)
@@ -44,7 +46,68 @@ def calculate_graph_metrics(G):
             metrics['transitivity'] = 0
     else:
         metrics['strongly_connected_nodes'] = 0
+        metrics['strongly_connected'] = False
         metrics['transitivity'] = 0
+
+    # Слабая связность
+    weak_components = list(nx.weakly_connected_components(G))
+    metrics['weakly_connected'] = len(weak_components) == 1
+
+    # Реципрокность
+    try:
+        metrics['reciprocity'] = nx.overall_reciprocity(G)
+    except:
+        metrics['reciprocity'] = 0
+
+    # Коэффициент кластеризации
+    try:
+        clustering = nx.clustering(G)
+        metrics['avg_clustering'] = sum(clustering.values()) / len(clustering)
+    except:
+        metrics['avg_clustering'] = 0
+
+    return metrics
+
+
+def calculate_graph_metrics(G):
+    """Рассчитывает основные метрики графа"""
+    metrics = {}
+
+    # Основные метрики
+    metrics['num_nodes'] = G.number_of_nodes()
+    metrics['num_edges'] = G.number_of_edges()
+    metrics['density'] = nx.density(G)
+
+    # Степени
+    if metrics['num_nodes'] > 0:
+        in_degrees = [d for n, d in G.in_degree()]
+        out_degrees = [d for n, d in G.out_degree()]
+
+        metrics['avg_in_degree'] = sum(in_degrees) / metrics['num_nodes']
+        metrics['avg_out_degree'] = sum(out_degrees) / metrics['num_nodes']
+        metrics['max_in_degree'] = max(in_degrees) if in_degrees else 0
+        metrics['max_out_degree'] = max(out_degrees) if out_degrees else 0
+
+    # Сильная связность
+    strong_components = list(nx.strongly_connected_components(G))
+    if strong_components:
+        largest_strong = max(strong_components, key=len)
+        metrics['strongly_connected_nodes'] = len(largest_strong)
+        metrics['strongly_connected'] = len(strong_components) == 1
+
+        G_strong = G.subgraph(largest_strong)
+        if len(largest_strong) > 1:
+            metrics['transitivity'] = nx.transitivity(G_strong)
+        else:
+            metrics['transitivity'] = 0
+    else:
+        metrics['strongly_connected_nodes'] = 0
+        metrics['strongly_connected'] = False
+        metrics['transitivity'] = 0
+
+    # Слабая связность
+    weak_components = list(nx.weakly_connected_components(G))
+    metrics['weakly_connected'] = len(weak_components) == 1
 
     # Реципрокность
     try:

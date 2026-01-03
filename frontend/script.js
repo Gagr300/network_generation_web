@@ -1,8 +1,5 @@
 // Глобальные переменные
-let currentGraph = null;
 let currentGraphData = null;
-let simulation = null;
-let showLabels = true;
 
 // Инициализация drag and drop
 document.addEventListener('DOMContentLoaded', function() {
@@ -71,8 +68,7 @@ async function handleFiles(files) {
 
         if (data.success) {
             currentGraphData = data.graph;
-            displayMetrics(data.metrics);
-            visualizeGraph(data.graph);
+            displayCombinedMetrics(data.metrics, data.graph);
             enableButtons();
             showSuccess('Graph uploaded successfully!');
         } else {
@@ -90,36 +86,20 @@ async function loadSampleData() {
     showLoading('Loading sample dataset...');
 
     try {
-        // В реальном приложении здесь был бы запрос к серверу для загрузки примера
-        // Для демо создадим простой граф
-        const sampleGraph = {
-            nodes: Array.from({length: 20}, (_, i) => ({id: `Node${i}`})),
-            edges: Array.from({length: 50}, () => ({
-                source: `Node${Math.floor(Math.random() * 20)}`,
-                target: `Node${Math.floor(Math.random() * 20)}`
-            })).filter(edge => edge.source !== edge.target)
-        };
+        const response = await fetch('/api/sample', {
+            method: 'GET'
+        });
 
-        // Создаем пример метрик
-        const sampleMetrics = {
-            num_nodes: 20,
-            num_edges: sampleGraph.edges.length,
-            density: (sampleGraph.edges.length / (20 * 19)).toFixed(4),
-            avg_in_degree: (sampleGraph.edges.length / 20).toFixed(2),
-            avg_out_degree: (sampleGraph.edges.length / 20).toFixed(2),
-            max_in_degree: 5,
-            max_out_degree: 5,
-            strongly_connected_nodes: 15,
-            transitivity: 0.3,
-            reciprocity: 0.4,
-            avg_clustering: 0.25
-        };
+        const data = await response.json();
 
-        currentGraphData = sampleGraph;
-        displayMetrics(sampleMetrics);
-        visualizeGraph(sampleGraph);
-        enableButtons();
-        showSuccess('Sample dataset loaded successfully!');
+        if (data.success) {
+            currentGraphData = data.graph;
+            displayCombinedMetrics(data.metrics, data.graph);
+            enableButtons();
+            showSuccess('Sample dataset loaded successfully!');
+        } else {
+            throw new Error(data.error || 'Failed to load sample');
+        }
     } catch (error) {
         showError('Error loading sample: ' + error.message);
     } finally {
@@ -180,8 +160,7 @@ async function generateGraph() {
 
         if (data.success) {
             currentGraphData = data.graph;
-            displayMetrics(data.metrics);
-            visualizeGraph(data.graph);
+            displayCombinedMetrics(data.metrics, data.graph);
             showSuccess('New graph generated successfully!');
         } else {
             throw new Error(data.error || 'Generation failed');
@@ -235,163 +214,216 @@ async function downloadGraph() {
     }
 }
 
-// Визуализация графа с D3.js
-function visualizeGraph(graphData) {
-    const container = document.getElementById('graph');
-    container.innerHTML = '';
+// Отображение объединенных метрик и информации
+function displayCombinedMetrics(metrics, graphData) {
+    const metricsDiv = document.getElementById('combinedMetrics');
 
-    const width = container.clientWidth;
-    const height = container.clientHeight;
+    if (!metrics || !graphData) {
+        metricsDiv.innerHTML = `
+            <div class="metrics-placeholder">
+                <i class="fas fa-chart-network fa-3x"></i>
+                <p>No graph data available</p>
+            </div>
+        `;
+        return;
+    }
 
-    const svg = d3.select('#graph')
-        .append('svg')
-        .attr('width', width)
-        .attr('height', height);
+    // Базовые метрики
+    const nodeCount = metrics.num_nodes || graphData.nodes.length;
+    const edgeCount = metrics.num_edges || graphData.edges.length;
+    const density = metrics.density || (nodeCount > 1 ? (edgeCount / (nodeCount * (nodeCount - 1))).toFixed(4) : '0.0000');
 
-    const g = svg.append('g');
-
-    // Создаем стрелки
-    svg.append('defs').append('marker')
-        .attr('id', 'arrowhead')
-        .attr('viewBox', '0 -5 10 10')
-        .attr('refX', 20)
-        .attr('refY', 0)
-        .attr('orient', 'auto')
-        .attr('markerWidth', 6)
-        .attr('markerHeight', 6)
-        .append('path')
-        .attr('d', 'M0,-5L10,0L0,5')
-        .attr('fill', '#666');
-
-    // Создаем симуляцию
-    simulation = d3.forceSimulation(graphData.nodes)
-        .force('link', d3.forceLink(graphData.edges).id(d => d.id).distance(100))
-        .force('charge', d3.forceManyBody().strength(-300))
-        .force('center', d3.forceCenter(width / 2, height / 2))
-        .force('collision', d3.forceCollide().radius(30));
-
-    // Создаем линии (ребра)
-    const link = g.append('g')
-        .selectAll('line')
-        .data(graphData.edges)
-        .enter()
-        .append('line')
-        .attr('class', 'link')
-        .attr('marker-end', 'url(#arrowhead)')
-        .style('stroke', '#999')
-        .style('stroke-width', 2);
-
-    // Создаем узлы
-    const node = g.append('g')
-        .selectAll('circle')
-        .data(graphData.nodes)
-        .enter()
-        .append('circle')
-        .attr('class', 'node')
-        .attr('r', 10)
-        .attr('fill', '#667eea')
-        .call(d3.drag()
-            .on('start', dragStarted)
-            .on('drag', dragged)
-            .on('end', dragEnded));
-
-    // Добавляем подписи
-    const label = g.append('g')
-        .selectAll('text')
-        .data(graphData.nodes)
-        .enter()
-        .append('text')
-        .attr('class', 'label')
-        .text(d => d.id)
-        .attr('font-size', '12px')
-        .attr('dx', 15)
-        .attr('dy', 4)
-        .style('opacity', showLabels ? 1 : 0);
-
-    // Обновление позиций
-    simulation.on('tick', () => {
-        link
-            .attr('x1', d => d.source.x)
-            .attr('y1', d => d.source.y)
-            .attr('x2', d => d.target.x)
-            .attr('y2', d => d.target.y);
-
-        node
-            .attr('cx', d => d.x)
-            .attr('cy', d => d.y);
-
-        label
-            .attr('x', d => d.x)
-            .attr('y', d => d.y);
+    // Подсчитываем дополнительные метрики
+    const selfLoopCount = countSelfLoops(graphData);
+    const reciprocalCount = countReciprocalEdges(graphData);
+    const edgeSet = new Set();
+    graphData.edges.forEach(edge => {
+        edgeSet.add(`${edge.source}-${edge.target}`);
     });
+    const uniqueEdges = edgeSet.size;
 
-    // Добавляем зум
-    const zoom = d3.zoom()
-        .scaleExtent([0.1, 4])
-        .on('zoom', (event) => {
-            g.attr('transform', event.transform);
-        });
+    // Форматируем значения
+    const formatValue = (value, decimalPlaces = 2) => {
+        if (value === undefined || value === null) return 'N/A';
+        if (typeof value === 'number') {
+            return value.toFixed(decimalPlaces);
+        }
+        return value;
+    };
 
-    svg.call(zoom);
+    metricsDiv.innerHTML = `
+        <div class="combined-metrics-container">
+            <!-- Основные метрики -->
+            <div class="metrics-section">
+                <h3><i class="fas fa-ruler-combined"></i> Basic Metrics</h3>
+                <div class="metrics-grid">
+                    <div class="metric-card">
+                        <div class="metric-icon">
+                            <i class="fas fa-circle-nodes"></i>
+                        </div>
+                        <div class="metric-content">
+                            <div class="metric-value">${nodeCount}</div>
+                            <div class="metric-label">Number of Vertices</div>
+                        </div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-icon">
+                            <i class="fas fa-link"></i>
+                        </div>
+                        <div class="metric-content">
+                            <div class="metric-value">${edgeCount}</div>
+                            <div class="metric-label">Number of Arcs</div>
+                        </div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-icon">
+                            <i class="fas fa-project-diagram"></i>
+                        </div>
+                        <div class="metric-content">
+                            <div class="metric-value">${formatValue(density, 4)}</div>
+                            <div class="metric-label">Graph Density</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
 
-    // Обработчики drag
-    function dragStarted(event, d) {
-        if (!event.active) simulation.alphaTarget(0.3).restart();
-        d.fx = d.x;
-        d.fy = d.y;
-    }
+            <!-- Связность -->
+            <div class="metrics-section">
+                <h3><i class="fas fa-sitemap"></i> Connectivity</h3>
+                <div class="metrics-grid">
+                    <div class="metric-card">
+                        <div class="metric-icon">
+                            <i class="fas fa-unlink"></i>
+                        </div>
+                        <div class="metric-content">
+                            <div class="metric-value">${metrics.weakly_connected || 'N/A'}</div>
+                            <div class="metric-label">Weakly Connected</div>
+                        </div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-icon">
+                            <i class="fas fa-link"></i>
+                        </div>
+                        <div class="metric-content">
+                            <div class="metric-value">${metrics.strongly_connected || 'N/A'}</div>
+                            <div class="metric-label">Strongly Connected</div>
+                        </div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-icon">
+                            <i class="fas fa-expand"></i>
+                        </div>
+                        <div class="metric-content">
+                            <div class="metric-value">${metrics.strongly_connected_nodes || metrics.num_nodes || nodeCount}</div>
+                            <div class="metric-label">Vertices in Largest SCC</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
 
-    function dragged(event, d) {
-        d.fx = event.x;
-        d.fy = event.y;
-    }
+            <!-- Статистики графа -->
+            <div class="metrics-section">
+                <h3><i class="fas fa-chart-line"></i> Graph Statistics</h3>
+                <div class="metrics-grid">
+                    <div class="metric-card">
+                        <div class="metric-icon">
+                            <i class="fas fa-exchange-alt"></i>
+                        </div>
+                        <div class="metric-content">
+                            <div class="metric-value">${formatValue(metrics.transitivity, 3)}</div>
+                            <div class="metric-label">Transitivity</div>
+                        </div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-icon">
+                            <i class="fas fa-retweet"></i>
+                        </div>
+                        <div class="metric-content">
+                            <div class="metric-value">${formatValue(metrics.reciprocity, 3)}</div>
+                            <div class="metric-label">Reciprocity</div>
+                        </div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-icon">
+                            <i class="fas fa-snowflake"></i>
+                        </div>
+                        <div class="metric-content">
+                            <div class="metric-value">${formatValue(metrics.avg_clustering, 3)}</div>
+                            <div class="metric-label">Avg Clustering</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
 
-    function dragEnded(event, d) {
-        if (!event.active) simulation.alphaTarget(0);
-        d.fx = null;
-        d.fy = null;
-    }
-
-    // Обновляем силу при изменении слайдера
-    document.getElementById('forceSlider').addEventListener('input', function() {
-        const strength = this.value;
-        simulation.force('charge', d3.forceManyBody().strength(-strength * 6));
-        simulation.alpha(0.3).restart();
-    });
+            <!-- Степени вершин -->
+            <div class="metrics-section">
+                <h3><i class="fas fa-signal"></i> Degree Statistics</h3>
+                <div class="metrics-grid">
+                    <div class="metric-card">
+                        <div class="metric-icon">
+                            <i class="fas fa-signal"></i>
+                        </div>
+                        <div class="metric-content">
+                            <div class="metric-value">${formatValue(metrics.avg_in_degree)}</div>
+                            <div class="metric-label">Avg In-Degree</div>
+                        </div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-icon">
+                            <i class="fas fa-signal"></i>
+                        </div>
+                        <div class="metric-content">
+                            <div class="metric-value">${formatValue(metrics.avg_out_degree)}</div>
+                            <div class="metric-label">Avg Out-Degree</div>
+                        </div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-icon">
+                            <i class="fas fa-chart-bar"></i>
+                        </div>
+                        <div class="metric-content">
+                            <div class="metric-value">${metrics.max_in_degree || 'N/A'}</div>
+                            <div class="metric-label">Max In-Degree</div>
+                        </div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-icon">
+                            <i class="fas fa-chart-bar"></i>
+                        </div>
+                        <div class="metric-content">
+                            <div class="metric-value">${metrics.max_out_degree || 'N/A'}</div>
+                            <div class="metric-label">Max Out-Degree</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
 }
 
-// Отображение метрик
-function displayMetrics(metrics) {
-    const metricsDiv = document.getElementById('metrics');
+// Вспомогательные функции
+function countSelfLoops(graphData) {
+    if (!graphData || !graphData.edges) return 0;
+    return graphData.edges.filter(edge => edge.source === edge.target).length;
+}
 
-    const metricItems = [
-        { key: 'num_nodes', label: 'Nodes', format: d => d },
-        { key: 'num_edges', label: 'Edges', format: d => d },
-        { key: 'density', label: 'Density', format: d => parseFloat(d).toFixed(4) },
-        { key: 'avg_in_degree', label: 'Avg In Degree', format: d => parseFloat(d).toFixed(2) },
-        { key: 'avg_out_degree', label: 'Avg Out Degree', format: d => parseFloat(d).toFixed(2) },
-        { key: 'max_in_degree', label: 'Max In Degree', format: d => d },
-        { key: 'max_out_degree', label: 'Max Out Degree', format: d => d },
-        { key: 'strongly_connected_nodes', label: 'Strongly Connected', format: d => d },
-        { key: 'transitivity', label: 'Transitivity', format: d => parseFloat(d).toFixed(3) },
-        { key: 'reciprocity', label: 'Reciprocity', format: d => parseFloat(d).toFixed(3) },
-        { key: 'avg_clustering', label: 'Avg Clustering', format: d => parseFloat(d).toFixed(3) }
-    ];
+function countReciprocalEdges(graphData) {
+    if (!graphData || !graphData.edges) return 0;
 
-    let html = '<div class="metrics-grid">';
-    metricItems.forEach(item => {
-        if (metrics[item.key] !== undefined) {
-            html += `
-                <div class="metric-item">
-                    <h4>${item.label}</h4>
-                    <div class="metric-value">${item.format(metrics[item.key])}</div>
-                </div>
-            `;
+    const edgeSet = new Set();
+    let reciprocalCount = 0;
+
+    graphData.edges.forEach(edge => {
+        const edgeKey = `${edge.source}-${edge.target}`;
+        const reverseKey = `${edge.target}-${edge.source}`;
+
+        if (edgeSet.has(reverseKey)) {
+            reciprocalCount++;
         }
+        edgeSet.add(edgeKey);
     });
-    html += '</div>';
 
-    metricsDiv.innerHTML = html;
+    return reciprocalCount;
 }
 
 // Отображение анализа мотивов
@@ -399,29 +431,63 @@ function displayMotifAnalysis(data) {
     const analysisDiv = document.getElementById('motifAnalysis');
 
     if (!data.motifs || data.motifs.length === 0) {
-        analysisDiv.innerHTML = '<p>No motif data available</p>';
+        analysisDiv.innerHTML = `
+            <div class="analysis-placeholder">
+                <i class="fas fa-chart-pie fa-3x"></i>
+                <p>No motif data available</p>
+            </div>
+        `;
         return;
     }
 
+    // Сортируем мотивы по количеству
+    const sortedMotifs = [...data.motifs].sort((a, b) => b.count - a.count);
+
     let html = `
         <div class="motif-summary">
-            <p>Total triplets analyzed: <strong>${data.total_motifs}</strong></p>
+            <div class="summary-card">
+                <h3>${data.total_motifs}</h3>
+                <p>Total Triplets</p>
+            </div>
         </div>
-        <div class="motif-grid">
+        <div class="motif-table-container">
+            <h4>Motif Distribution</h4>
+            <table class="motif-table">
+                <thead>
+                    <tr>
+                        <th>Motif ID</th>
+                        <th>Count</th>
+                        <th>Percentage</th>
+                    </tr>
+                </thead>
+                <tbody>
     `;
 
-    data.motifs.forEach(motif => {
-        const percentage = (motif.probability * 100).toFixed(2);
+    sortedMotifs.forEach(motif => {
+        const percentage = data.total_motifs > 0 ? ((motif.count / data.total_motifs) * 100).toFixed(2) : '0.00';
         html += `
-            <div class="motif-item">
-                <h4>M${motif.id}</h4>
-                <div class="motif-count">${motif.count}</div>
-                <div class="motif-probability">${percentage}%</div>
-            </div>
+            <tr>
+                <td><strong>M${motif.id}</strong></td>
+                <td>${motif.count}</td>
+                <td>${percentage}%</td>
+            </tr>
         `;
     });
 
-    html += '</div>';
+    html += `
+                </tbody>
+            </table>
+        </div>
+        <div class="motif-insights">
+            <h4>Insights:</h4>
+            <ul>
+                <li><strong>Most common motif:</strong> M${sortedMotifs[0].id} (${((sortedMotifs[0].count / data.total_motifs) * 100).toFixed(2)}%)</li>
+                <li><strong>Least common motif:</strong> M${sortedMotifs[sortedMotifs.length - 1].id} (${((sortedMotifs[sortedMotifs.length - 1].count / data.total_motifs) * 100).toFixed(2)}%)</li>
+                <li><strong>Number of unique motifs:</strong> ${sortedMotifs.filter(m => m.count > 0).length}</li>
+            </ul>
+        </div>
+    `;
+
     analysisDiv.innerHTML = html;
 }
 
@@ -430,19 +496,6 @@ function enableButtons() {
     document.getElementById('analyzeBtn').disabled = false;
     document.getElementById('generateBtn').disabled = false;
     document.getElementById('downloadBtn').disabled = false;
-}
-
-// Сброс вида графа
-function resetView() {
-    if (simulation) {
-        simulation.alpha(1).restart();
-    }
-}
-
-// Переключение подписей
-function toggleLabels() {
-    showLabels = !showLabels;
-    d3.selectAll('.label').style('opacity', showLabels ? 1 : 0);
 }
 
 // Управление загрузкой
@@ -456,20 +509,10 @@ function hideLoading() {
 }
 
 function showSuccess(message) {
-    alert('Success: ' + message);
+    console.log('Success:', message);
 }
 
 function showError(message) {
+    console.error('Error:', message);
     alert('Error: ' + message);
 }
-
-// Добавляем CSS для сетки метрик
-const style = document.createElement('style');
-style.textContent = `
-    .metrics-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-        gap: 15px;
-    }
-`;
-document.head.appendChild(style);
