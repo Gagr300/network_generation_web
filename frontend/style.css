@@ -6,7 +6,7 @@
 
 body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
     min-height: 100vh;
     color: #333;
 }
@@ -19,12 +19,13 @@ body {
 
 header {
     text-align: center;
-    color: white;
+    color: #2d3748;
     margin-bottom: 30px;
     padding: 20px;
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.9);
     border-radius: 15px;
-    backdrop-filter: blur(10px);
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    border: 1px solid #e2e8f0;
 }
 
 header h1 {
@@ -34,11 +35,12 @@ header h1 {
     align-items: center;
     justify-content: center;
     gap: 15px;
+    color: #4a5568;
 }
 
 header p {
     font-size: 1.1em;
-    opacity: 0.9;
+    color: #718096;
 }
 
 .main-content {
@@ -53,12 +55,14 @@ header p {
     border-radius: 15px;
     padding: 25px;
     margin-bottom: 25px;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+    border: 1px solid #e2e8f0;
     transition: transform 0.3s ease;
 }
 
 .card:hover {
-    transform: translateY(-5px);
+    transform: translateY(-3px);
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.08);
 }
 
 .card h2 {
@@ -68,10 +72,12 @@ header p {
     align-items: center;
     gap: 10px;
     font-size: 1.4em;
+    border-bottom: 2px solid #edf2f7;
+    padding-bottom: 10px;
 }
 
 .upload-area {
-    border: 3px dashed #cbd5e0;
+    border: 2px dashed #cbd5e0;
     border-radius: 10px;
     padding: 40px 20px;
     text-align: center;
@@ -81,7 +87,7 @@ header p {
 }
 
 .upload-area:hover {
-    border-color: #667eea;
+    border-color: #4a5568;
     background: #edf2f7;
 }
 
@@ -107,7 +113,7 @@ header p {
 .upload-area button {
     margin-top: 20px;
     padding: 12px 30px;
-    background: #667eea;
+    background: #4a5568;
     color: white;
     border: none;
     border-radius: 8px;
@@ -118,7 +124,7 @@ header p {
 }
 
 .upload-area button:hover {
-    background: #5a67d8;
+    background: #2d3748;
 }
 
 .sample-data {
@@ -135,7 +141,7 @@ header p {
 .sample-data button {
     width: 100%;
     padding: 12px;
-    background: #48bb78;
+    background: #718096;
     color: white;
     border: none;
     border-radius: 8px;
@@ -146,17 +152,17 @@ header p {
 }
 
 .sample-data button:hover {
-    background: #38a169;
+    background: #4a5568;
 }
 
 .controls {
     display: flex;
     flex-direction: column;
-    gap: 15px;
+    gap: 12px;
 }
 
 .controls button {
-    padding: 15px;
+    padding: 14px;
     border: none;
     border-radius: 8px;
     font-size: 1em;
@@ -165,7 +171,7 @@ header p {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 10px;
+    gap: 12px;
     transition: all 0.3s ease;
 }
 
@@ -175,51 +181,101 @@ header p {
 }
 
 #analyzeBtn {
-    background: #4299e1;
+    background: #4a5568;
     color: white;
 }
 
 #analyzeBtn:hover:not(:disabled) {
-    background: #3182ce;
+    background: #2d3748;
 }
 
 #generateBtn {
-    background: #ed8936;
+    background: #718096;
     color: white;
 }
 
 #generateBtn:hover:not(:disabled) {
-    background: #dd6b20;
+    background: #4a5568;
 }
 
-.download-options {
+.download-buttons {
     margin-top: 20px;
     padding-top: 20px;
     border-top: 1px solid #e2e8f0;
 }
 
-.download-options h4 {
-    margin-bottom: 10px;
+.download-buttons h4 {
+    margin-bottom: 15px;
     color: #4a5568;
+    font-size: 1.1em;
 }
 
-.download-options select {
+#downloadTxtBtn {
+    background: #4a5568;
+    color: white;
     width: 100%;
-    padding: 10px;
     margin-bottom: 10px;
-    border: 2px solid #e2e8f0;
-    border-radius: 6px;
-    font-size: 1em;
 }
 
-#downloadBtn {
-    background: #9f7aea;
+#downloadTxtBtn:hover:not(:disabled) {
+    background: #2d3748;
+}
+
+#downloadJsonBtn {
+    background: #718096;
     color: white;
     width: 100%;
 }
 
-#downloadBtn:hover:not(:disabled) {
-    background: #805ad5;
+#downloadJsonBtn:hover:not(:disabled) {
+    background: #4a5568;
+}
+
+/* Progress bar styles */
+.progress-container {
+    margin-top: 20px;
+    background: #edf2f7;
+    border-radius: 8px;
+    padding: 15px;
+    border: 1px solid #e2e8f0;
+}
+
+.progress-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 8px;
+    color: #4a5568;
+    font-weight: 600;
+}
+
+.progress-bar {
+    height: 20px;
+    background: #e2e8f0;
+    border-radius: 10px;
+    overflow: hidden;
+    position: relative;
+}
+
+.progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #a0aec0 0%, #718096 100%);
+    width: 0%;
+    transition: width 0.3s ease;
+    border-radius: 10px;
+}
+
+.progress-text {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: 600;
+    font-size: 0.9em;
 }
 
 /* Combined Metrics Styles */
@@ -249,7 +305,7 @@ header p {
     background: #f8fafc;
     padding: 20px;
     border-radius: 10px;
-    border-left: 4px solid #667eea;
+    border-left: 4px solid #4a5568;
 }
 
 .metrics-section h3 {
@@ -274,14 +330,14 @@ header p {
     display: flex;
     align-items: center;
     gap: 15px;
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.03);
     border: 1px solid #e2e8f0;
 }
 
 .metric-icon {
     width: 40px;
     height: 40px;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, #a0aec0 0%, #718096 100%);
     border-radius: 50%;
     display: flex;
     align-items: center;
@@ -328,7 +384,7 @@ header p {
 }
 
 .summary-card {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, #a0aec0 0%, #718096 100%);
     color: white;
     padding: 20px;
     border-radius: 10px;
@@ -367,15 +423,15 @@ header p {
 }
 
 .motif-insights {
-    background: #fef3c7;
+    background: #f7fafc;
     padding: 15px;
     border-radius: 8px;
     margin-top: 20px;
-    border-left: 4px solid #d69e2e;
+    border-left: 4px solid #a0aec0;
 }
 
 .motif-insights h4 {
-    color: #744210;
+    color: #4a5568;
     margin-bottom: 10px;
 }
 
@@ -386,7 +442,7 @@ header p {
 
 .motif-insights li {
     padding: 5px 0;
-    color: #5f370e;
+    color: #4a5568;
 }
 
 /* Modal Styles */
@@ -414,11 +470,12 @@ header p {
     border-radius: 15px;
     text-align: center;
     min-width: 300px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
 }
 
 .loader {
     border: 5px solid #f3f3f3;
-    border-top: 5px solid #667eea;
+    border-top: 5px solid #4a5568;
     border-radius: 50%;
     width: 50px;
     height: 50px;
@@ -433,12 +490,13 @@ header p {
 
 footer {
     text-align: center;
-    color: white;
+    color: #4a5568;
     padding: 20px;
     margin-top: 30px;
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.9);
     border-radius: 15px;
-    backdrop-filter: blur(10px);
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+    border: 1px solid #e2e8f0;
 }
 
 /* Scrollbar Styling */
@@ -483,10 +541,6 @@ footer {
     }
 
     .metrics-grid {
-        grid-template-columns: 1fr;
-    }
-
-    .info-grid {
         grid-template-columns: 1fr;
     }
 }

@@ -266,6 +266,50 @@ def get_sample_data():
         return jsonify({'error': str(e)}), 500
 
 
+# Добавьте этот endpoint в app.py для отслеживания прогресса
+@app.route('/api/generate_progress', methods=['POST'])
+def generate_graph_with_progress():
+    """Генерация нового графа с отслеживанием прогресса"""
+    data = request.json
+    original_graph = data.get('original_graph')
+
+    if not original_graph:
+        return jsonify({'error': 'No graph data provided'}), 400
+
+    try:
+        # Восстанавливаем граф из JSON
+        G = nx.DiGraph()
+        for node in original_graph['nodes']:
+            G.add_node(node['id'])
+        for edge in original_graph['edges']:
+            G.add_edge(edge['source'], edge['target'])
+
+        # Генерируем новый граф
+        generator = RandomGraphGenerator(G, motifs)
+
+        # Получаем количество ребер для генерации
+        target_edges = len(G.edges())
+
+        # Обновляем метод wegner_multiplet_model для отслеживания прогресса
+        # В реальной реализации это должно быть через WebSockets или Server-Sent Events
+        # Здесь упрощенный вариант
+        new_G = generator.wegner_multiplet_model()
+
+        # Рассчитываем метрики
+        metrics = calculate_graph_metrics(new_G)
+
+        # Конвертируем в JSON
+        graph_json = graph_to_json(new_G)
+
+        return jsonify({
+            'success': True,
+            'metrics': metrics,
+            'graph': graph_json
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 if __name__ == '__main__':
     # Проверяем наличие папок
     if not os.path.exists(app.static_folder):

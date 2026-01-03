@@ -1,5 +1,9 @@
 // Глобальные переменные
 let currentGraphData = null;
+let currentMetrics = null;
+let totalEdgesToGenerate = 0;
+let currentGeneratedEdges = 0;
+let progressInterval = null;
 
 // Инициализация drag and drop
 document.addEventListener('DOMContentLoaded', function() {
@@ -25,8 +29,8 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 
     function highlight() {
-        uploadArea.style.borderColor = '#667eea';
-        uploadArea.style.background = '#e2e8f0';
+        uploadArea.style.borderColor = '#4a5568';
+        uploadArea.style.background = '#edf2f7';
     }
 
     function unhighlight() {
@@ -68,6 +72,7 @@ async function handleFiles(files) {
 
         if (data.success) {
             currentGraphData = data.graph;
+            currentMetrics = data.metrics;
             displayCombinedMetrics(data.metrics, data.graph);
             enableButtons();
             showSuccess('Graph uploaded successfully!');
@@ -94,6 +99,7 @@ async function loadSampleData() {
 
         if (data.success) {
             currentGraphData = data.graph;
+            currentMetrics = data.metrics;
             displayCombinedMetrics(data.metrics, data.graph);
             enableButtons();
             showSuccess('Sample dataset loaded successfully!');
@@ -143,7 +149,10 @@ async function analyzeGraph() {
 async function generateGraph() {
     if (!currentGraphData) return;
 
-    showLoading('Generating new graph... This may take a moment.');
+    const totalEdges = currentGraphData.edges.length;
+    startProgressTracking(totalEdges);
+
+    // Убрано: showLoading('Generating new graph... This may take a moment.');
 
     try {
         const response = await fetch('/api/generate', {
@@ -160,25 +169,30 @@ async function generateGraph() {
 
         if (data.success) {
             currentGraphData = data.graph;
+            currentMetrics = data.metrics;
             displayCombinedMetrics(data.metrics, data.graph);
+            completeProgress();
             showSuccess('New graph generated successfully!');
         } else {
             throw new Error(data.error || 'Generation failed');
         }
     } catch (error) {
+        if (progressInterval) {
+            clearInterval(progressInterval);
+            progressInterval = null;
+        }
+        document.getElementById('progressContainer').style.display = 'none';
         showError('Error generating graph: ' + error.message);
     } finally {
         hideLoading();
     }
 }
 
-// Скачивание графа
-async function downloadGraph() {
+// Скачивание edgelist в формате .txt
+async function downloadTxt() {
     if (!currentGraphData) return;
 
-    const format = document.getElementById('downloadFormat').value;
-
-    showLoading('Preparing download...');
+    showLoading('Preparing edgelist download...');
 
     try {
         const response = await fetch('/api/download', {
@@ -188,7 +202,7 @@ async function downloadGraph() {
             },
             body: JSON.stringify({
                 graph: currentGraphData,
-                format: format
+                format: 'txt'
             })
         });
 
@@ -200,18 +214,137 @@ async function downloadGraph() {
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `generated_graph.${format}`;
+        a.download = `graph_edgelist_${new Date().toISOString().split('T')[0]}.txt`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
         window.URL.revokeObjectURL(url);
 
-        showSuccess('Download started!');
+        showSuccess('Edgelist download started!');
     } catch (error) {
         showError('Error downloading: ' + error.message);
     } finally {
         hideLoading();
     }
+}
+
+// Скачивание всей информации в формате JSON
+async function downloadJson() {
+    if (!currentGraphData || !currentMetrics) return;
+
+    showLoading('Preparing JSON download...');
+
+    try {
+        // Получаем анализ мотивов
+        let motifAnalysis = null;
+        try {
+            const analysisResponse = await fetch('/api/analyze', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    graph: currentGraphData
+                })
+            });
+
+            if (analysisResponse.ok) {
+                motifAnalysis = await analysisResponse.json();
+            }
+        } catch (error) {
+            console.warn('Could not get motif analysis for JSON:', error);
+        }
+
+        // Создаем полный объект с данными
+        const fullData = {
+            graph: currentGraphData,
+            metrics: currentMetrics,
+            motifAnalysis: motifAnalysis?.success ? motifAnalysis : null,
+            metadata: {
+                generatedAt: new Date().toISOString(),
+                nodesCount: currentGraphData.nodes.length,
+                edgesCount: currentGraphData.edges.length,
+                fileName: `graph_complete_${new Date().toISOString().split('T')[0]}.json`
+            }
+        };
+
+        // Создаем и скачиваем JSON файл
+        const dataStr = JSON.stringify(fullData, null, 2);
+        const dataBlob = new Blob([dataStr], { type: 'application/json' });
+        const url = window.URL.createObjectURL(dataBlob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fullData.metadata.fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+
+        showSuccess('Complete information download started!');
+    } catch (error) {
+        showError('Error downloading JSON: ' + error.message);
+    } finally {
+        hideLoading();
+    }
+}
+
+// Управление прогресс-баром
+function startProgressTracking(totalEdges) {
+    totalEdgesToGenerate = totalEdges;
+    currentGeneratedEdges = 0;
+
+    const progressContainer = document.getElementById('progressContainer');
+    if (progressContainer) {
+        progressContainer.style.display = 'block';
+        document.getElementById('progressFill').style.width = '0%';
+        document.getElementById('progressPercentage').textContent = '0%';
+        document.getElementById('progressText').textContent = '0%';
+    }
+
+    // Имитация обновления прогресса
+    if (progressInterval) {
+        clearInterval(progressInterval);
+    }
+    progressInterval = setInterval(updateProgressSimulation, 500);
+}
+
+function updateProgressSimulation() {
+    if (totalEdgesToGenerate > 0 && progressInterval) {
+        // Имитация прогресса - постепенное увеличение до 95%
+        const currentProgress = parseInt(document.getElementById('progressText').textContent) || 0;
+        if (currentProgress < 95) {
+            const newProgress = Math.min(95, currentProgress + Math.floor(Math.random() * 10));
+            updateProgressDisplay(newProgress);
+        }
+    }
+}
+
+function updateProgressDisplay(percentage) {
+    const progressFill = document.getElementById('progressFill');
+    const progressPercentage = document.getElementById('progressPercentage');
+    const progressText = document.getElementById('progressText');
+
+    if (progressFill && progressPercentage && progressText) {
+        progressFill.style.width = percentage + '%';
+        progressPercentage.textContent = percentage + '%';
+        progressText.textContent = percentage + '%';
+    }
+}
+
+function completeProgress() {
+    if (progressInterval) {
+        clearInterval(progressInterval);
+        progressInterval = null;
+    }
+    updateProgressDisplay(100);
+
+    // Скрываем прогресс-бар через 2 секунды
+    setTimeout(() => {
+        const progressContainer = document.getElementById('progressContainer');
+        if (progressContainer) {
+            progressContainer.style.display = 'none';
+        }
+    }, 2000);
 }
 
 // Отображение объединенных метрик и информации
@@ -228,19 +361,13 @@ function displayCombinedMetrics(metrics, graphData) {
         return;
     }
 
+    // Сохраняем метрики для скачивания JSON
+    currentMetrics = metrics;
+
     // Базовые метрики
     const nodeCount = metrics.num_nodes || graphData.nodes.length;
     const edgeCount = metrics.num_edges || graphData.edges.length;
     const density = metrics.density || (nodeCount > 1 ? (edgeCount / (nodeCount * (nodeCount - 1))).toFixed(4) : '0.0000');
-
-    // Подсчитываем дополнительные метрики
-    const selfLoopCount = countSelfLoops(graphData);
-    const reciprocalCount = countReciprocalEdges(graphData);
-    const edgeSet = new Set();
-    graphData.edges.forEach(edge => {
-        edgeSet.add(`${edge.source}-${edge.target}`);
-    });
-    const uniqueEdges = edgeSet.size;
 
     // Форматируем значения
     const formatValue = (value, decimalPlaces = 2) => {
@@ -493,23 +620,34 @@ function displayMotifAnalysis(data) {
 
 // Включение кнопок
 function enableButtons() {
-    document.getElementById('analyzeBtn').disabled = false;
-    document.getElementById('generateBtn').disabled = false;
-    document.getElementById('downloadBtn').disabled = false;
+    const analyzeBtn = document.getElementById('analyzeBtn');
+    const generateBtn = document.getElementById('generateBtn');
+    const downloadTxtBtn = document.getElementById('downloadTxtBtn');
+    const downloadJsonBtn = document.getElementById('downloadJsonBtn');
+
+    if (analyzeBtn) analyzeBtn.disabled = false;
+    if (generateBtn) generateBtn.disabled = false;
+    if (downloadTxtBtn) downloadTxtBtn.disabled = false;
+    if (downloadJsonBtn) downloadJsonBtn.disabled = false;
 }
 
 // Управление загрузкой
 function showLoading(message) {
-    document.getElementById('loadingMessage').textContent = message;
-    document.getElementById('loadingModal').classList.add('active');
+    const loadingMessage = document.getElementById('loadingMessage');
+    const loadingModal = document.getElementById('loadingModal');
+
+    if (loadingMessage) loadingMessage.textContent = message;
+    if (loadingModal) loadingModal.classList.add('active');
 }
 
 function hideLoading() {
-    document.getElementById('loadingModal').classList.remove('active');
+    const loadingModal = document.getElementById('loadingModal');
+    if (loadingModal) loadingModal.classList.remove('active');
 }
 
 function showSuccess(message) {
     console.log('Success:', message);
+    // Можно добавить уведомление в интерфейс
 }
 
 function showError(message) {

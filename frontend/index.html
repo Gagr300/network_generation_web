@@ -41,16 +41,26 @@
                         <button id="generateBtn" onclick="generateGraph()" disabled>
                             <i class="fas fa-magic"></i> Generate New Graph
                         </button>
-                        <div class="download-options">
+
+                        <!-- Progress bar для генерации -->
+                        <div id="progressContainer" class="progress-container" style="display: none;">
+                            <div class="progress-header">
+                                <span>Generation Progress</span>
+                                <span id="progressText">0%</span>
+                            </div>
+                            <div class="progress-bar">
+                                <div id="progressFill" class="progress-fill"></div>
+                                <div id="progressPercentage" class="progress-text">0%</div>
+                            </div>
+                        </div>
+
+                        <div class="download-buttons">
                             <h4>Download Options:</h4>
-                            <select id="downloadFormat">
-                                <option value="txt">Text (Edgelist)</option>
-                                <option value="gml">GML</option>
-                                <option value="gexf">GEXF</option>
-                                <option value="graphml">GraphML</option>
-                            </select>
-                            <button onclick="downloadGraph()" disabled id="downloadBtn">
-                                <i class="fas fa-download"></i> Download
+                            <button onclick="downloadTxt()" disabled id="downloadTxtBtn">
+                                <i class="fas fa-file-alt"></i> Download Edgelist (.txt)
+                            </button>
+                            <button onclick="downloadJson()" disabled id="downloadJsonBtn">
+                                <i class="fas fa-file-code"></i> Download All Info (.json)
                             </button>
                         </div>
                     </div>
