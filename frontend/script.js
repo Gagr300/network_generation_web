@@ -1,12 +1,15 @@
 // Глобальные переменные
+let socket = null;
+let currentSessionId = null;
 let currentGraphData = null;
 let currentMetrics = null;
+let progressInterval = null;
 let totalEdgesToGenerate = 0;
 let currentGeneratedEdges = 0;
-let progressInterval = null;
 
 // Инициализация drag and drop
 document.addEventListener('DOMContentLoaded', function() {
+    initializeWebSocket();
     const uploadArea = document.getElementById('uploadArea');
     const fileInput = document.getElementById('fileInput');
 
@@ -149,11 +152,62 @@ async function analyzeGraph() {
 async function generateGraph() {
     if (!currentGraphData) return;
 
+    // Генерируем уникальный ID сессии
+    currentSessionId = Date.now().toString();
+
     const totalEdges = currentGraphData.edges.length;
-    startProgressTracking(totalEdges);
 
-    // Убрано: showLoading('Generating new graph... This may take a moment.');
+    // Показываем прогресс-бар
+    const progressContainer = document.getElementById('progressContainer');
+    if (progressContainer) {
+        progressContainer.style.display = 'block';
+        document.getElementById('progressFill').style.width = '0%';
+        document.getElementById('progressPercentage').textContent = '0%';
+        document.getElementById('progressText').textContent = '0 / ' + totalEdges;
+        document.getElementById('progressDetails').textContent = 'Starting generation...';
+    }
 
+    // Отключаем кнопку генерации во время процесса
+    const generateBtn = document.getElementById('generateBtn');
+    if (generateBtn) {
+        generateBtn.disabled = true;
+        generateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating...';
+    }
+
+    try {
+        const response = await fetch('/api/generate_stream', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                original_graph: currentGraphData,
+                session_id: currentSessionId
+            })
+        });
+
+        const data = await response.json();
+
+        if (!data.success) {
+            throw new Error(data.error || 'Failed to start generation');
+        }
+
+        console.log('Generation started with session:', data.session_id);
+
+        // Запускаем polling для проверки прогресса
+        startProgressPolling();
+
+        // Также запускаем обычную генерацию для совместимости
+        generateLegacy();
+
+    } catch (error) {
+        showError('Error starting generation: ' + error.message);
+        resetGenerateButton();
+        document.getElementById('progressContainer').style.display = 'none';
+    }
+}
+
+async function generateLegacy() {
     try {
         const response = await fetch('/api/generate', {
             method: 'POST',
@@ -167,24 +221,39 @@ async function generateGraph() {
 
         const data = await response.json();
 
-        if (data.success) {
-            currentGraphData = data.graph;
-            currentMetrics = data.metrics;
-            displayCombinedMetrics(data.metrics, data.graph);
-            completeProgress();
-            showSuccess('New graph generated successfully!');
-        } else {
-            throw new Error(data.error || 'Generation failed');
-        }
-    } catch (error) {
         if (progressInterval) {
             clearInterval(progressInterval);
             progressInterval = null;
         }
-        document.getElementById('progressContainer').style.display = 'none';
+
+        if (data.success) {
+            // Показываем 100%
+            updateProgressDisplay(100, currentGraphData.edges.length, currentGraphData.edges.length);
+            document.getElementById('progressDetails').textContent = 'Generation complete!';
+
+            // Обновляем данные
+            currentGraphData = data.graph;
+            currentMetrics = data.metrics;
+            displayCombinedMetrics(data.metrics, data.graph);
+
+            showSuccess('New graph generated successfully!');
+
+            // Скрываем прогресс-бар через 2 секунды
+            setTimeout(() => {
+                const progressContainer = document.getElementById('progressContainer');
+                if (progressContainer) {
+                    progressContainer.style.display = 'none';
+                }
+            }, 2000);
+        } else {
+            throw new Error(data.error || 'Generation failed');
+        }
+    } catch (error) {
         showError('Error generating graph: ' + error.message);
+        document.getElementById('progressDetails').textContent = 'Error: ' + error.message;
     } finally {
-        hideLoading();
+        resetGenerateButton();
+        currentSessionId = null;
     }
 }
 
@@ -288,38 +357,57 @@ async function downloadJson() {
     }
 }
 
+function startProgressPolling() {
+    if (progressInterval) {
+        clearInterval(progressInterval);
+    }
+
+    progressInterval = setInterval(async () => {
+        if (!currentSessionId) return;
+
+        try {
+            // Здесь можно добавить endpoint для получения прогресса
+            // Но для простоты будем использовать эмуляцию прогресса
+            updateProgressSimulation();
+        } catch (error) {
+            console.error('Error checking progress:', error);
+        }
+    }, 500);
+}
+
 // Управление прогресс-баром
 function startProgressTracking(totalEdges) {
-    totalEdgesToGenerate = totalEdges;
-    currentGeneratedEdges = 0;
-
+    // Эта функция теперь не нужна для WebSocket версии,
+    // но оставляем для совместимости с legacy кодом
     const progressContainer = document.getElementById('progressContainer');
     if (progressContainer) {
         progressContainer.style.display = 'block';
         document.getElementById('progressFill').style.width = '0%';
         document.getElementById('progressPercentage').textContent = '0%';
-        document.getElementById('progressText').textContent = '0%';
+        document.getElementById('progressText').textContent = '0 / ' + totalEdges;
     }
-
-    // Имитация обновления прогресса
-    if (progressInterval) {
-        clearInterval(progressInterval);
-    }
-    progressInterval = setInterval(updateProgressSimulation, 500);
 }
 
 function updateProgressSimulation() {
-    if (totalEdgesToGenerate > 0 && progressInterval) {
-        // Имитация прогресса - постепенное увеличение до 95%
-        const currentProgress = parseInt(document.getElementById('progressText').textContent) || 0;
-        if (currentProgress < 95) {
-            const newProgress = Math.min(95, currentProgress + Math.floor(Math.random() * 10));
-            updateProgressDisplay(newProgress);
-        }
+    const progressContainer = document.getElementById('progressContainer');
+    if (!progressContainer || progressContainer.style.display === 'none') return;
+
+    const currentProgress = parseInt(document.getElementById('progressFill').style.width) || 0;
+    const totalEdges = currentGraphData.edges.length;
+
+    if (currentProgress < 95) {
+        // Имитация прогресса
+        const increment = Math.floor(Math.random() * 5);
+        const newProgress = Math.min(95, currentProgress + increment);
+        const currentEdges = Math.floor((newProgress / 100) * totalEdges);
+
+        updateProgressDisplay(newProgress, currentEdges, totalEdges);
+        document.getElementById('progressDetails').textContent =
+            `Generating edges: ${currentEdges} / ${totalEdges}`;
     }
 }
 
-function updateProgressDisplay(percentage) {
+function updateProgressDisplay(percentage, current, total) {
     const progressFill = document.getElementById('progressFill');
     const progressPercentage = document.getElementById('progressPercentage');
     const progressText = document.getElementById('progressText');
@@ -327,9 +415,11 @@ function updateProgressDisplay(percentage) {
     if (progressFill && progressPercentage && progressText) {
         progressFill.style.width = percentage + '%';
         progressPercentage.textContent = percentage + '%';
-        progressText.textContent = percentage + '%';
+        progressText.textContent = current + ' / ' + total;
+        progressFill.style.transition = 'width 0.3s ease';
     }
 }
+
 
 function completeProgress() {
     if (progressInterval) {
@@ -553,6 +643,40 @@ function countReciprocalEdges(graphData) {
     return reciprocalCount;
 }
 
+// Инициализация WebSocket при загрузке страницы
+function initializeWebSocket() {
+    if (!socket) {
+        // Подключаемся к WebSocket серверу
+        socket = io('http://' + window.location.hostname + ':5000');
+
+        socket.on('connect', function() {
+            console.log('Connected to WebSocket server');
+        });
+
+        socket.on('generation_progress', function(data) {
+            if (data.session_id === currentSessionId) {
+                updateProgressDisplay(data.progress, data.current, data.total);
+            }
+        });
+
+        socket.on('generation_complete', function(data) {
+            if (data.session_id === currentSessionId) {
+                handleGenerationComplete(data);
+            }
+        });
+
+        socket.on('generation_error', function(data) {
+            if (data.session_id === currentSessionId) {
+                handleGenerationError(data);
+            }
+        });
+
+        socket.on('disconnect', function() {
+            console.log('Disconnected from WebSocket server');
+        });
+    }
+}
+
 // Отображение анализа мотивов
 function displayMotifAnalysis(data) {
     const analysisDiv = document.getElementById('motifAnalysis');
@@ -617,6 +741,52 @@ function displayMotifAnalysis(data) {
 
     analysisDiv.innerHTML = html;
 }
+
+// Обработка завершения генерации
+function handleGenerationComplete(data) {
+    if (data.success) {
+        currentGraphData = data.graph;
+        currentMetrics = data.metrics;
+        displayCombinedMetrics(data.metrics, data.graph);
+
+        // Показываем 100% на несколько секунд
+        setTimeout(() => {
+            const progressContainer = document.getElementById('progressContainer');
+            if (progressContainer) {
+                progressContainer.style.display = 'none';
+            }
+        }, 2000);
+
+        showSuccess('New graph generated successfully!');
+    }
+
+    resetGenerateButton();
+    currentSessionId = null;
+}
+
+// Обработка ошибки генерации
+function handleGenerationError(data) {
+    showError('Error generating graph: ' + data.error);
+    resetGenerateButton();
+
+    const progressContainer = document.getElementById('progressContainer');
+    if (progressContainer) {
+        progressContainer.style.display = 'none';
+    }
+
+    currentSessionId = null;
+}
+
+// Сброс кнопки генерации
+function resetGenerateButton() {
+    const generateBtn = document.getElementById('generateBtn');
+    if (generateBtn) {
+        generateBtn.disabled = false;
+        generateBtn.innerHTML = '<i class="fas fa-magic"></i> Generate New Graph';
+    }
+}
+
+
 
 // Включение кнопок
 function enableButtons() {

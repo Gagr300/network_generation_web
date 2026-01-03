@@ -1,8 +1,9 @@
 import networkx as nx
 from dotmotif import GrandIsoExecutor
-from random import randrange, choices
+from random import randrange, choices, choice
 from itertools import permutations
-from .triplets import motifs, motifs_edges
+from typing import Callable, Optional
+from .triplets import motifs, motifs_edges, motifs_digraphs
 
 
 class SubgraphStructure:
@@ -11,8 +12,8 @@ class SubgraphStructure:
             self.index = index
             self.motif = motif
             self.count = count
-            self.nodes = set(a for a, b in motif.list_edge_constraints().keys()) | set(
-                b for a, b in motif.list_edge_constraints().keys())
+            self.nodes = set(a for a, b in motifs[0].list_edge_constraints().keys()) | set(
+                b for a, b in motifs[0].list_edge_constraints().keys())
             self.probability = 0
 
     def __init__(self, graph, motif_types):
@@ -22,31 +23,25 @@ class SubgraphStructure:
         self.graph = graph
         self.inv_graph = nx.difference(nx.complete_graph(graph.nodes(), nx.DiGraph()), graph)
         E_inv = GrandIsoExecutor(graph=self.inv_graph)
-
         for i in range(len(motif_types)):
-            if i == 0:  # no edges at all
-                motif_count = len(E_inv.find(motif_types[3]))  # full_graph
+            if i == 0:
+                motif_count = len(E_inv.find(motif_types[15]))  # full
             elif i == 1:
-                motif_count = len(E_inv.find(motif_types[2]))  # oneway twoway twoway
+                motif_count = len(E_inv.find(motif_types[14]))  # oneway twoway twoway
             elif i == 2:
-                motif_count = len(E_inv.find(motif_types[12]))  # noway twoway twoway
+                motif_count = len(E_inv.find(motif_types[8]))  # noway twoway twoway
             else:
                 motif_count = len(E.find(motif_types[i]))
-
             self.motif_subgraphs[motif_types[i]] = self.SubgraphType(motif_types[i], motif_count, i)
             self.motifs_sum += motif_count
-
+            print(i, motif_types[i], motif_count)
+        print(self.motifs_sum, self.graph)
         self.left_probabilities = [0] * len(motif_types)
 
         if self.motifs_sum > 0:
             for x in self.motif_subgraphs:
                 self.motif_subgraphs[x].probability = self.motif_subgraphs[x].count / self.motifs_sum
                 self.left_probabilities[self.motif_subgraphs[x].index] = self.motif_subgraphs[x].probability
-
-    def add_edges_to_graph(self, graph, motif, vertices):
-        dict_nodes = {a: b for a, b in zip(self.motif_subgraphs[motif].nodes, vertices)}
-        graph.add_edges_from([(dict_nodes[a], dict_nodes[b]) for a, b in motif.list_edge_constraints().keys()])
-        self.left_probabilities[self.motif_subgraphs[motif].index] -= 1. / self.motifs_sum
 
 
 class RandomGraphGenerator:
@@ -55,87 +50,93 @@ class RandomGraphGenerator:
         self.M = len(graph.edges())
         self.subgraphStructure = SubgraphStructure(graph, motif_types)
         self.motif_types = motif_types
+        self.possible_motifs = {
+            0: list(range(16)),
+            1: list(range(1, 16)),
+            2: [2, 6, 7, 8, 11, 12, 13, 14, 15],
+            3: [3, 6, 8, 10, 11, 12, 13, 14, 15],
+            4: [4, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+            5: [5, 7, 8, 10, 11, 12, 13, 14, 15],
+            6: [6, 8, 12, 13, 14, 15],
+            7: [7, 8, 11, 13, 14, 15],
+            8: [8, 14, 15],
+            9: [9, 13, 14, 15],
+            10: [10, 11, 14, 15],
+            11: [11, 14, 15],
+            12: [12, 14, 15],
+            13: [13, 14, 15],
+            14: [14, 15],
+            15: [15]
+        }
+        self.progress_callback = None  # для отслеживания прогресса
+
+    def set_progress_callback(self, callback: Callable[[int, int], None]):
+        """Устанавливает callback для отслеживания прогресса"""
+        self.progress_callback = callback
 
     def wegner_multiplet_model(self):
-        self.new_graph = nx.DiGraph()
-        self.new_graph.add_nodes_from([i for i in range(self.N)])
-        possible_motifs = [0] * len(self.motif_types)
+        print('wegner_multiplet_model')
+        new_graph = nx.DiGraph()
+        new_graph.add_nodes_from([i for i in range(self.N)])
 
-        while len(self.new_graph.edges()) < self.M:
-            # Выбираем случайную тройку вершин
+        iteration = 0
+        max_iterations = self.M * 100
+
+        while len(new_graph.edges()) < self.M and iteration < max_iterations:
+
+            iteration += 1
+
+            # тройка вершин
             a, b, c = randrange(self.N), randrange(self.N), randrange(self.N)
             if a == b or b == c or a == c:
                 continue
 
-            # Определяем возможные мотивы для этой тройки
-            possible_motifs = [0] * len(self.motif_types)
+            # определение возможных мотивов
+            triangle = nx.DiGraph(new_graph.subgraph([a, b, c]))
+            cur_motif = [i for i in range(16) if nx.is_isomorphic(motifs_digraphs[i], triangle)][0]
+            possible_motifs = [self.subgraphStructure.left_probabilities[i] for i in self.possible_motifs[cur_motif]]
 
-            for i in range(4):
-                for j in range(4):
-                    for k in range(4):
-                        triangle = nx.DiGraph(self.new_graph.subgraph([a, b, c]))
+            try:
+                # Выбираем случайный мотив с учетом весов
+                rnd_motif_subgraph = choices(self.possible_motifs[cur_motif], weights=possible_motifs)[0]
+            except ValueError as e:
+                # если weights все нулевые или negative, выбираем случайный
+                print(f"Error: {e}")
+                rnd_motif_subgraph = choice(self.possible_motifs[cur_motif])
 
-                        # Добавляем ребра между A и B
-                        if i == 0:
-                            triangle.add_edges_from([(a, b)])
-                        elif i == 1:
-                            triangle.add_edges_from([(b, a)])
-                        elif i == 2:
-                            triangle.add_edges_from([(a, b), (b, a)])
-
-                        # Добавляем ребра между C и B
-                        if j == 0:
-                            triangle.add_edges_from([(c, b)])
-                        elif j == 1:
-                            triangle.add_edges_from([(b, c)])
-                        elif j == 2:
-                            triangle.add_edges_from([(c, b), (b, c)])
-
-                        # Добавляем ребра между A и C
-                        if k == 0:
-                            triangle.add_edges_from([(a, c)])
-                        elif k == 1:
-                            triangle.add_edges_from([(c, a)])
-                        elif k == 2:
-                            triangle.add_edges_from([(a, c), (c, a)])
-
-                        # Рассчитываем вероятности мотивов
-                        structure = SubgraphStructure(triangle, self.motif_types)
-                        possible_motifs = [a + b for a, b in zip(possible_motifs, structure.left_probabilities)]
-
-            # Выбираем мотив для построения
-            motif_weights = [1 if b > 0 and self.subgraphStructure.left_probabilities[a] > 0 else 0
-                             for a, b in enumerate(possible_motifs)]
-
-            if sum(motif_weights) == 0:
-                continue
-
-            rnd_motif_idx = choices([i for i in range(len(self.motif_types))], weights=motif_weights)[0]
-
-            # Находим лучшую перестановку вершин для добавления ребер
+            # Находим оптимальную перестановку вершин
             best_dict = None
-            min_diff = float('inf')
+            min_dif = float('inf')
 
             for A, B, C in permutations([a, b, c]):
                 dict_nodes = {'A': A, 'B': B, 'C': C}
-                current_edges = set(self.new_graph.edges([A, B, C]))
+                triangle = nx.DiGraph(new_graph.subgraph([a, b, c]))
+                # Добавляем ребра из выбранного мотива
+                triangle.add_edges_from([(dict_nodes[a], dict_nodes[b])
+                                         for a, b in motifs_edges[rnd_motif_subgraph]])
 
-                # Создаем новые ребра согласно мотиву
-                new_edges = {(dict_nodes[X], dict_nodes[Y]) for X, Y in motifs_edges[rnd_motif_idx]}
+                # Вычисляем разницу между текущим и желаемым количеством ребер
+                current_edges = len(triangle.edges())
+                desired_edges = len(motifs_edges[rnd_motif_subgraph])
+                dif = abs(current_edges - desired_edges)
 
-                # Вычисляем разницу
-                diff = len(new_edges - current_edges)
-
-                if diff < min_diff:
-                    min_diff = diff
+                if dif < min_dif:
+                    min_dif = dif
                     best_dict = dict_nodes
 
             # Добавляем ребра в граф
             if best_dict:
-                edges_to_add = [(best_dict[X], best_dict[Y]) for X, Y in motifs_edges[rnd_motif_idx]]
-                self.new_graph.add_edges_from(edges_to_add)
+                new_graph.add_edges_from([(best_dict[a], best_dict[b])
+                                          for a, b in motifs_edges[rnd_motif_subgraph]])
 
-                # Обновляем структуру (упрощенная версия)
-                self.subgraphStructure.left_probabilities[rnd_motif_idx] -= 1.0 / self.subgraphStructure.motifs_sum
+                if self.progress_callback:
+                    self.progress_callback(
+                        len(new_graph.edges()), self.M)
 
-        return self.new_graph
+            # Обновляем структуру мотивов
+            structure = SubgraphStructure(new_graph, self.motif_types)
+
+        if iteration >= max_iterations:
+            print(f"Warning: Reached maximum iterations ({max_iterations})")
+
+        return new_graph

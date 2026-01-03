@@ -1,30 +1,187 @@
 import os
 import json
-import networkx as nx
+import time
+import threading
+import uuid
 from flask import Flask, request, jsonify, send_file, send_from_directory
 from flask_cors import CORS
+from flask_socketio import SocketIO, emit
 import tempfile
+import networkx as nx
 from network_generation.triplet_model import RandomGraphGenerator, motifs
 from network_generation.utils import graph_to_json, calculate_graph_metrics
 
 app = Flask(__name__, static_folder='../frontend', static_url_path='')
 CORS(app)
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 
-# Создаем папку для временных файлов
-UPLOAD_FOLDER = tempfile.mkdtemp()
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-
-
-@app.route('/')
-def serve_index():
-    """Обслуживание главной страницы"""
-    return send_from_directory(app.static_folder, 'index.html')
+# Словарь для хранения прогресса по сессиям
+progress_data = {}
 
 
-@app.route('/<path:path>')
-def serve_static(path):
-    """Обслуживание статических файлов"""
-    return send_from_directory(app.static_folder, path)
+@app.route('/api/generate_stream', methods=['POST'])
+def generate_graph_stream():
+    """Генерация графа с потоковым обновлением прогресса через WebSocket"""
+    data = request.json
+    original_graph = data.get('original_graph')
+    session_id = data.get('session_id') or str(uuid.uuid4())
+
+    if not original_graph:
+        return jsonify({'error': 'No graph data provided'}), 400
+
+    # Инициализируем прогресс для этой сессии
+    progress_data[session_id] = {
+        'progress': 0,
+        'current': 0,
+        'total': 0,
+        'status': 'starting'
+    }
+
+    # Запускаем генерацию в отдельном потоке
+    def generate_in_thread():
+        try:
+            # Восстанавливаем граф из JSON
+            G = nx.DiGraph()
+            for node in original_graph['nodes']:
+                G.add_node(node['id'])
+            for edge in original_graph['edges']:
+                G.add_edge(edge['source'], edge['target'])
+
+            total_edges = len(G.edges())
+
+            # Обновляем общее количество ребер
+            progress_data[session_id]['total'] = total_edges
+            progress_data[session_id]['status'] = 'generating'
+
+            # Создаем генератор с callback для прогресса
+            generator = RandomGraphGenerator(G, motifs)
+
+            def progress_callback(current, total):
+                progress = min(100, int((current / total) * 100))
+                progress_data[session_id] = {
+                    'progress': progress,
+                    'current': current,
+                    'total': total,
+                    'status': 'generating'
+                }
+                # Отправляем обновление через WebSocket
+                socketio.emit('generation_progress', {
+                    'session_id': session_id,
+                    'progress': progress,
+                    'current': current,
+                    'total': total,
+                    'status': 'generating'
+                })
+                time.sleep(0.001)  # Небольшая задержка для UI
+
+            generator.set_progress_callback(progress_callback)
+
+            # Генерируем граф
+            new_G = generator.wegner_multiplet_model()
+
+            # Рассчитываем метрики
+            metrics = calculate_graph_metrics(new_G)
+            graph_json = graph_to_json(new_G)
+
+            # Обновляем статус
+            progress_data[session_id]['status'] = 'complete'
+
+            # Отправляем финальный результат
+            socketio.emit('generation_complete', {
+                'session_id': session_id,
+                'success': True,
+                'metrics': metrics,
+                'graph': graph_json,
+                'status': 'complete'
+            })
+
+        except Exception as e:
+            progress_data[session_id]['status'] = 'error'
+            socketio.emit('generation_error', {
+                'session_id': session_id,
+                'error': str(e),
+                'status': 'error'
+            })
+        finally:
+            # Не удаляем сразу, чтобы фронтенд мог получить последнее состояние
+            # Удалим через некоторое время
+            time.sleep(5)
+            if session_id in progress_data:
+                del progress_data[session_id]
+
+    # Запускаем поток
+    thread = threading.Thread(target=generate_in_thread)
+    thread.daemon = True
+    thread.start()
+
+    return jsonify({
+        'success': True,
+        'session_id': session_id,
+        'message': 'Generation started'
+    })
+
+
+@socketio.on('connect')
+def handle_connect():
+    print('Client connected')
+    emit('connected', {'status': 'connected'})
+
+
+@socketio.on('disconnect')
+def handle_disconnect():
+    print('Client disconnected')
+
+
+@socketio.on('get_progress')
+def handle_get_progress(data):
+    session_id = data.get('session_id')
+    if session_id and session_id in progress_data:
+        emit('progress_update', progress_data[session_id])
+    else:
+        emit('progress_update', {
+            'progress': 0,
+            'current': 0,
+            'total': 0,
+            'status': 'not_found'
+        })
+
+
+# Остальные endpoint без изменений...
+@app.route('/api/generate', methods=['POST'])
+def generate_graph():
+    """Генерация нового графа (legacy endpoint)"""
+    data = request.json
+    original_graph = data.get('original_graph')
+
+    if not original_graph:
+        return jsonify({'error': 'No graph data provided'}), 400
+
+    try:
+        # Восстанавливаем граф из JSON
+        G = nx.DiGraph()
+        for node in original_graph['nodes']:
+            G.add_node(node['id'])
+        for edge in original_graph['edges']:
+            G.add_edge(edge['source'], edge['target'])
+
+        # Генерируем новый граф
+        generator = RandomGraphGenerator(G, motifs)
+        new_G = generator.wegner_multiplet_model()
+
+        # Рассчитываем метрики
+        metrics = calculate_graph_metrics(new_G)
+
+        # Конвертируем в JSON
+        graph_json = graph_to_json(new_G)
+
+        return jsonify({
+            'success': True,
+            'metrics': metrics,
+            'graph': graph_json
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 @app.route('/api/upload', methods=['POST'])
@@ -71,43 +228,6 @@ def upload_graph():
         # Удаляем временный файл
         if os.path.exists(filepath):
             os.remove(filepath)
-
-
-@app.route('/api/generate', methods=['POST'])
-def generate_graph():
-    """Генерация нового графа"""
-    data = request.json
-    original_graph = data.get('original_graph')
-
-    if not original_graph:
-        return jsonify({'error': 'No graph data provided'}), 400
-
-    try:
-        # Восстанавливаем граф из JSON
-        G = nx.DiGraph()
-        for node in original_graph['nodes']:
-            G.add_node(node['id'])
-        for edge in original_graph['edges']:
-            G.add_edge(edge['source'], edge['target'])
-
-        # Генерируем новый граф
-        generator = RandomGraphGenerator(G, motifs)
-        new_G = generator.wegner_multiplet_model()
-
-        # Рассчитываем метрики
-        metrics = calculate_graph_metrics(new_G)
-
-        # Конвертируем в JSON
-        graph_json = graph_to_json(new_G)
-
-        return jsonify({
-            'success': True,
-            'metrics': metrics,
-            'graph': graph_json
-        })
-
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
 
 
 @app.route('/api/analyze', methods=['POST'])
@@ -198,8 +318,7 @@ def download_graph():
     finally:
         # Удаляем временный файл после отправки
         if os.path.exists(filepath):
-            import time
-            time.sleep(1)  # Даем время на отправку файла
+            time.sleep(1)
             try:
                 os.remove(filepath)
             except:
@@ -266,49 +385,22 @@ def get_sample_data():
         return jsonify({'error': str(e)}), 500
 
 
-# Добавьте этот endpoint в app.py для отслеживания прогресса
-@app.route('/api/generate_progress', methods=['POST'])
-def generate_graph_with_progress():
-    """Генерация нового графа с отслеживанием прогресса"""
-    data = request.json
-    original_graph = data.get('original_graph')
+# Создаем папку для временных файлов
+UPLOAD_FOLDER = tempfile.mkdtemp()
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
-    if not original_graph:
-        return jsonify({'error': 'No graph data provided'}), 400
 
-    try:
-        # Восстанавливаем граф из JSON
-        G = nx.DiGraph()
-        for node in original_graph['nodes']:
-            G.add_node(node['id'])
-        for edge in original_graph['edges']:
-            G.add_edge(edge['source'], edge['target'])
+@app.route('/')
+def serve_index():
+    """Обслуживание главной страницы"""
+    return send_from_directory(app.static_folder, 'index.html')
 
-        # Генерируем новый граф
-        generator = RandomGraphGenerator(G, motifs)
 
-        # Получаем количество ребер для генерации
-        target_edges = len(G.edges())
+@app.route('/<path:path>')
+def serve_static(path):
+    """Обслуживание статических файлов"""
+    return send_from_directory(app.static_folder, path)
 
-        # Обновляем метод wegner_multiplet_model для отслеживания прогресса
-        # В реальной реализации это должно быть через WebSockets или Server-Sent Events
-        # Здесь упрощенный вариант
-        new_G = generator.wegner_multiplet_model()
-
-        # Рассчитываем метрики
-        metrics = calculate_graph_metrics(new_G)
-
-        # Конвертируем в JSON
-        graph_json = graph_to_json(new_G)
-
-        return jsonify({
-            'success': True,
-            'metrics': metrics,
-            'graph': graph_json
-        })
-
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     # Проверяем наличие папок
@@ -316,4 +408,4 @@ if __name__ == '__main__':
         print(f"Warning: Static folder {app.static_folder} not found!")
         print("Make sure frontend files are in the correct location.")
 
-    app.run(debug=True, port=5000)
+    socketio.run(app, debug=True, port=5000, allow_unsafe_werkzeug=True)
